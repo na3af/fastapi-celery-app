@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.celery_app import celery_app
 from app.tasks import add_numbers, process_file
+from app.errors import TaskError
 
 app = FastAPI(title="FastAPI + Celery Demo")
 
@@ -37,17 +38,25 @@ def get_task_status(task_id: str):
     if task.status == "PENDING":
         return response
 
-    if task.ready():
-        result = task.result
+    if task.status == "FAILURE":
+        # Task actually failed in Celery - extract error info
+        exc = task.result  # This is the exception instance
 
-        if isinstance(result, dict):
-            if result.get("success"):
-                response["status"] = "SUCCESS"
-                response["result"] = result.get("data")
-            else:
-                response["status"] = "FAILED"
-                response["error"] = result.get("error")
+        if isinstance(exc, TaskError):
+            response["error"] = {
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+            }
         else:
-            response["result"] = result
+            response["error"] = {
+                "code": "INTERNAL_ERROR",
+                "message": str(exc),
+                "details": {"type": type(exc).__name__},
+            }
+        return response
+
+    if task.status == "SUCCESS":
+        response["result"] = task.result
 
     return response
