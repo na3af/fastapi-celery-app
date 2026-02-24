@@ -39,20 +39,23 @@ def get_task_status(task_id: str):
         return response
 
     if task.status == "FAILURE":
-        # Task actually failed in Celery - extract error info
-        exc = task.result  # This is the exception instance
+        exc = task.result
 
+        # Check if it's our TaskError (has args with code, message, details)
         if isinstance(exc, TaskError):
+            response["error"] = exc.to_dict()
+        elif hasattr(exc, "args") and len(exc.args) >= 3:
+            # Unpickled TaskError - args = (code, message, details)
             response["error"] = {
-                "code": exc.code,
-                "message": exc.message,
-                "details": exc.details,
+                "code": exc.args[0],
+                "message": exc.args[1],
+                "details": exc.args[2] if exc.args[2] else {},
             }
         else:
             response["error"] = {
                 "code": "INTERNAL_ERROR",
                 "message": str(exc),
-                "details": {"type": type(exc).__name__},
+                "details": {},
             }
         return response
 

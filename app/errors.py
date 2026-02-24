@@ -13,11 +13,12 @@ class ErrorCode(str, Enum):
 class TaskError(Exception):
     """Custom exception that serializes properly for Celery/Redis."""
 
-    def __init__(self, code: ErrorCode, message: str, details: dict = None):
+    def __init__(self, code, message: str, details: dict = None):
         self.code = code.value if isinstance(code, ErrorCode) else code
         self.message = message
-        self.details = details or {}
-        super().__init__(message)
+        self.details = details if details is not None else {}
+        # Store in args for proper pickling
+        super().__init__(self.code, self.message, self.details)
 
     def to_dict(self) -> dict:
         return {
@@ -25,10 +26,6 @@ class TaskError(Exception):
             "message": self.message,
             "details": self.details,
         }
-
-    def __reduce__(self):
-        """Make exception picklable for Redis storage."""
-        return (self.__class__, (self.code, self.message, self.details))
 
 
 class PathNotFoundError(TaskError):
